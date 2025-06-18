@@ -1,110 +1,43 @@
-// WhatsApp integration
-import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
+// 📁 src/lib/whatsapp.js
+import pkg from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { logger } from './logger.js';
-import * as messageController from '../controllers/messageController.js';
+import { handleIncomingMessage } from '../controllers/messageController.js';
 
-// For __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import {generateReply } from "./ai.js"
 
-// Create a client instance
-let client;
+const { Client, LocalAuth } = pkg;
 
-// Initialize WhatsApp client
-export const initialize = async () => {
-  client = new Client({
-    authStrategy: new LocalAuth({
-      dataPath: path.resolve(process.env.WHATSAPP_SESSION_DATA_PATH || './session-data')
-    }),
-    puppeteer: {
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-  });
+const client = new Client({
+  authStrategy: new LocalAuth(),
+  puppeteer: { headless: true },
+});
 
-  // Generate QR code for authentication
-  client.on('qr', (qr) => {
-    logger.info('QR RECEIVED. Scan with WhatsApp:');
-    qrcode.generate(qr, { small: true });
-  });
+client.on('qr', (qr) => {
+  qrcode.generate(qr, { small: true });
+  console.log('📱 Scan the QR code above to connect WhatsApp');
+});
 
-  // Client is ready
-  client.on('ready', () => {
-    logger.info('WhatsApp client is ready!');
-  });
+client.on('ready', () => {
+  console.log(`
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║   🚀 SHOTLIN X WHATSAPP BOT SUCCESSFULLY CONNECTED AND READY! 🚀          ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+`);
+});
 
-  // Handle incoming messages
-  client.on('message', async (msg) => {
-    if (msg.from.endsWith('@c.us')) { // Filter out group messages
-      try {
-        const response = await messageController.handleIncomingMessage(msg);
-        if (response) {
-          await msg.reply(response);
-        }
-      } catch (error) {
-        logger.error('Error handling message:', error);
-      }
-    }
-  });
+client.on('message', async (msg) => {
+  console.log(`✉️ Received message from ${msg.from}: ${msg.body}`);
+  await handleIncomingMessage(msg);
+});
 
-  // Authentication failure
-  client.on('auth_failure', (error) => {
-    logger.error('WhatsApp authentication failed:', error);
-  });
+client.initialize();
 
-  // Initialize client
-  try {
-    await client.initialize();
-    return client;
-  } catch (err) {
-    logger.error('Failed to initialize WhatsApp client:', err);
-    throw err;
-  }
-};
-
-// Send message to a specific number
-export const sendMessage = async (to, message) => {
-  try {
-    if (!client) {
-      throw new Error('WhatsApp client not initialized');
-    }
-    
-    // Format number to international format if needed
-    const formattedNumber = to.includes('@c.us') ? to : `${to}@c.us`;
-    await client.sendMessage(formattedNumber, message);
-    logger.debug(`Message sent to ${to}`);
-    return true;
-  } catch (error) {
-    logger.error(`Failed to send message to ${to}:`, error);
-    return false;
-  }
-};
-
-// Send message to admin/team
-export const notifyAdmin = async (message) => {
-  try {
-    if (!client) {
-      throw new Error('WhatsApp client not initialized');
-    }
-    
-    // Send to admin
-    if (process.env.ADMIN_PHONE) {
-      await sendMessage(process.env.ADMIN_PHONE, `🤖 SHOTLIN X ALERT: ${message}`);
-    }
-    
-    // Send to team group if configured
-    if (process.env.TEAM_GROUP_ID) {
-      await client.sendMessage(process.env.TEAM_GROUP_ID, `🤖 SHOTLIN X ALERT: ${message}`);
-    }
-    
-    return true;
-  } catch (error) {
-    logger.error('Failed to notify admin:', error);
-    return false;
-  }
+export const sendWhatsAppMessage = async (phone, message) => {
+  const chatId = `${phone.replace(/[^0-9]/g, '')}@c.us`;
+  console.log(`💬 Sending to ${chatId}: ${message}`);
+  await client.sendMessage(chatId, message);
 };
 
 export { client };

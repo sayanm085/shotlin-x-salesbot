@@ -1,46 +1,16 @@
-// Main Entry Point
-import dotenv from 'dotenv';
-import connectDB from './src/config/db.js';  // Changed from destructured import
 import app from './src/app.js';
-import { initialize as initializeWhatsApp } from './src/lib/whatsapp.js';
-import { initialize as initializeReminders } from './src/lib/reminders.js';
-import { logger } from './src/lib/logger.js';
+import connectDB from './src/config/db.js';
 
-// Load environment variables
-dotenv.config();
+const PORT = process.env.PORT || 5000;
 
-const PORT = process.env.PORT || 3000;
-
-// Connect to MongoDB and start services
-const startServer = async () => {
-  try {
-    // Connect to MongoDB
-    await connectDB();  // Changed to use default export
-    
-    // Start Express server
+// Connect to MongoDB and start the server
+connectDB()
+  .then(() => {
     app.listen(PORT, () => {
-      logger.info(`Shotlin X Sales Agent running on port ${PORT}`);
+      console.log(`✅ Server is running at http://localhost:${PORT}`);
     });
-    
-    // Initialize WhatsApp client
-    await initializeWhatsApp();
-    
-    // Initialize reminder system
-    await initializeReminders();
-    
-  } catch (err) {
-    logger.error('Failed to start server:', err);
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB connection failed:', err);
     process.exit(1);
-  }
-};
-
-startServer();
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Promise Rejection:', err);
-  // Don't crash in production
-  if (process.env.NODE_ENV === 'development') {
-    process.exit(1);
-  }
-});
+  });
